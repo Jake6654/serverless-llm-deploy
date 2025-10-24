@@ -1,0 +1,24 @@
+# Ignore Python virtual environments
+vevn/
+venv/
+.env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore macOS system files
+.DS_Store
+
+# Ignore model cache folders (Hugging Face, Diffusers, etc.)
+.cache/
+huggingface/
+transformers_cache/
+diffusers_cache/
+
+# Ignore output images and generated files
+*.png
+*.jpg
+*.jpeg
+*.gif
+outputs/
