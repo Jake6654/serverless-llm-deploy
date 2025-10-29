@@ -1,0 +1,26 @@
+services:
+  lora-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - BASE_MODEL=${BASE_MODEL}
+      - HF_HOME=/app/.cache/huggingface
+      - MODE=${MODE:-fastapi} # fastapi | serve
+      - RAY_NUM_REPLICAS=${RAY_NUM_REPLICAS:-1}
+      - RAY_NUM_GPUS_PER_REPLICA=${RAY_NUM_GPUS_PER_REPLICA:-1}
+    volumes:
+      - ./.cache/huggingface:/app/.cache/huggingface
+    # Compose v2: 간단히 gpus: all (드라이버/런타임 자동)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    # 최신 compose에선 아래도 가능: (둘 중 하나만 사용)
+    # gpus: all
+    runtime: nvidia

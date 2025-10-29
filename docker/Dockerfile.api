@@ -1,0 +1,25 @@
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=America/New_York \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    HF_HOME=/app/.cache/huggingface \
+    TRANSFORMERS_CACHE=/app/.cache/huggingface \
+    HF_HUB_ENABLE_HF_TRANSFER=1 \
+    MODE=fastapi
+
+RUN apt-get update && apt-get install -y python3-pip git bash && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+
+COPY docker/requirements.txt /app/requirements.txt
+RUN pip3 install --upgrade pip && pip3 install -r /app/requirements.txt
+
+COPY api /app/api
+COPY demo /app/demo
+COPY docker/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# 기본은 FastAPI 모드. (MODE=serve 로 바꾸면 Ray Serve)
+EXPOSE 8000
+CMD ["bash","-lc","/app/entrypoint.sh"]
