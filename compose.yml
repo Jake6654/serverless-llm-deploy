@@ -15,12 +15,13 @@ services:
       - RAY_NUM_GPUS_PER_REPLICA=${RAY_NUM_GPUS_PER_REPLICA:-1}
     volumes:
       - ./.cache/huggingface:/app/.cache/huggingface
-    # Compose v2: 간단히 gpus: all (드라이버/런타임 자동)
+
+    # [수정됨] shm_size 와 GPU 설정을 명확하게 추가합니다.
+    shm_size: "8g" # Stable Diffusion에 필수
     deploy:
       resources:
         reservations:
           devices:
-            - capabilities: [gpu]
-    # 최신 compose에선 아래도 가능: (둘 중 하나만 사용)
-    # gpus: all
-    runtime: nvidia
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

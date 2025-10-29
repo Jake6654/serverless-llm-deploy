@@ -1,4 +1,5 @@
-torch==2.3.0+cu121 --index-url https://download.pytorch.org/whl/cu121
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.3.0+cu121
 diffusers>=0.29.0
 transformers>=4.40.0
 accelerate>=0.30.0
@@ -6,4 +7,8 @@ safetensors>=0.4.2
 Pillow>=10.0.0
 fastapi>=0.110
 uvicorn[standard]>=0.29
-ray[default]>=2.9.0,<3.0
+
+# [수정됨] Ray 2.9 버전을 제거하고 최신 버전을 사용합니다.
+ray[serve]
+
+hf_transfer>=0.1.6
