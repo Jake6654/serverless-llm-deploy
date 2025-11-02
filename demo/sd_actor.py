@@ -6,53 +6,84 @@ import ray
 
 class DiffusionActor:
     """
-    Stable Diffusion 파이프라인을 미리 로드하고,
-    요청마다 LoRA attach -> 이미지 생성 -> LoRA detach 를 수행하는 Actor.
+    pre-load Stable Diffusion pipline,
+    whenever request comes, Actor do  LoRA attach -> create image -> LoRA detach.
+    - Device Priority: cuda > mps > cpu
+    - dtype: cuda/mps(float16) / cpu(float32)
     """
-    def __init__(self, base_model_id, dtype_str):
-        # ❗️지연 import (전역에서 diffusers import 금지)
-        from diffusers import StableDiffusionPipeline
+    def __init__(self, base_model_id: str = "runwayml/stable-diffusion-v1-5", dtype_str: str = "auto"):
+        from diffusers import StableDiffusionPipeline  # lazy import
 
-        pid = os.getpid()
-        print(f"[Actor {pid}] start. Base model loading...")
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        elif torch.backends.mps.is_available():
+            self.device = "mps"
+        else:
+            self.device = "cpu"
 
-        self.device = "mps" if torch.backends.mps.is_available() else "cpu"
-        self.dtype = torch.float16 if dtype_str == "float16" else torch.float32
+        if dtype_str == "auto":
+            self.dtype = torch.float16 if self.device in ("cuda", "mps") else torch.float32
+        else:
+            self.dtype = getattr(torch, dtype_str)
 
         t0 = time.time()
         self.pipe = StableDiffusionPipeline.from_pretrained(
-            base_model_id, torch_dtype=self.dtype
+            base_model_id,
+            torch_dtype=self.dtype,
+            use_safetensors=True,
         ).to(self.device)
-        self.pipe.set_progress_bar_config(disable=True)
-        print(f"[Actor {pid}] load complete ({time.time() - t0:.2f}s)")
 
-    # 반환 타입 힌트 없음 (Ray 직렬화 안전)
-    def generate_with_lora(self, prompt, lora_repo, lora_weight, lora_scale, seed):
-        g = torch.Generator(device=self.device).manual_seed(seed)
+        if hasattr(self.pipe, "enable_attention_slicing"):
+            self.pipe.enable_attention_slicing()
+        if hasattr(self.pipe, "set_progress_bar_config"):
+            self.pipe.set_progress_bar_config(disable=True)
+        if hasattr(self.pipe, "safety_checker"):
+            try:
+                self.pipe.safety_checker = None
+            except Exception:
+                pass
 
-        # 1) LoRA attach
-        t_attach = time.time()
-        self.pipe.load_lora_weights(
-            lora_repo, weight_name=lora_weight, adapter_name="current_lora"
-        )
-        if hasattr(self.pipe, "set_adapters"):
-            self.pipe.set_adapters(["current_lora"], adapter_weights=[float(lora_scale)])
-        print(f"[Actor {os.getpid()}] LoRA attach OK ({time.time() - t_attach:.2f}s)")
+        print(f"[Actor:{os.getpid()}] Loaded {base_model_id} on {self.device} ({self.dtype}) in {time.time()-t0:.1f}s")
 
-        # 2) 생성
+    def generate_with_lora(
+        self,
+        prompt: str,
+        lora_repo: str | None = None,
+        weight_name: str | None = None,
+        lora_scale: float = 1.0,
+        steps: int = 22,
+        guidance: float = 7.0,
+        seed: int = 42,
+        width: int = 512,
+        height: int = 512,
+        adapter_name: str = "current",
+    ):
+        # 1) attach (요청 시에만)
+        if lora_repo and weight_name:
+            self.pipe.load_lora_weights(lora_repo, weight_name=weight_name, adapter_name=adapter_name)
+            if hasattr(self.pipe, "set_adapters"):
+                self.pipe.set_adapters([adapter_name], adapter_weights=[float(lora_scale)])
+
+        # 2) generate
+        g = torch.Generator(device=self.device).manual_seed(int(seed))
         t_gen = time.time()
-        img = self.pipe(
-            prompt, num_inference_steps=22, guidance_scale=7.0, generator=g
+        image = self.pipe(
+            prompt,
+            num_inference_steps=int(steps),
+            guidance_scale=float(guidance),
+            width=int(width),
+            height=int(height),
+            generator=g,
         ).images[0]
         gen_time = time.time() - t_gen
 
-        # 3) LoRA detach
-        if hasattr(self.pipe, "unload_lora_weights"):
-            self.pipe.unload_lora_weights()
-        elif hasattr(self.pipe, "set_adapters"):
-            self.pipe.set_adapters([])
+        # 3) detach
+        if lora_repo and weight_name:
+            if hasattr(self.pipe, "unload_lora_weights"):
+                self.pipe.unload_lora_weights()
+            elif hasattr(self.pipe, "set_adapters"):
+                self.pipe.set_adapters([])
 
-        return img, gen_time, f"actor_{os.getpid()}"
+        return image, gen_time, f"actor_{os.getpid()}"
 
-# 모듈 레벨에서 post-remote 래핑
-DiffusionActorRemote = ray.remote(num_cpus=1)(DiffusionActor)
+DiffusionActorRemote = ray.remote(DiffusionActor)
