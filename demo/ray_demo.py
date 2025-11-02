@@ -29,7 +29,7 @@ def main():
     task1 = {
         "prompt": "a man working on his coding project, soft light, animation style",
         "lora_repo": "J-YOON/animate-lora-sd1.5",
-        "weight_name": "pytorch_lora_weights.safetensors",
+        "weight_name": "animate_v1-000005.safetensors",
         "lora_scale": 1.0,
         "steps": 20,
         "guidance": 7.0,
