@@ -6,10 +6,12 @@ import ray
 import torch
 from sd_actor import DiffusionActorRemote  # same folder
 
+# deactivate tracer to simplify logs
 os.environ.setdefault("RAY_DISABLE_CUSTOMIZED_TRACER", "1")
 
 def init_ray():
     addr = os.getenv("RAY_ADDRESS")
+    # 외부 레이 클러스가 주소가 있다면 외부 클러스 연결
     if addr:
         print(f"[Ray] Connecting to cluster: {addr}")
         ray.init(address=addr)
@@ -21,8 +23,10 @@ def main():
     BASE_MODEL = os.getenv("BASE_MODEL", "runwayml/stable-diffusion-v1-5")
     DTYPE_STR = os.getenv("DTYPE_STR", "auto")
 
+    # Gpu allocation
     gpu_per_actor = 1 if torch.cuda.is_available() else 0
 
+    # create two actor
     a1 = DiffusionActorRemote.options(num_gpus=gpu_per_actor).remote(BASE_MODEL, DTYPE_STR)
     a2 = DiffusionActorRemote.options(num_gpus=gpu_per_actor).remote(BASE_MODEL, DTYPE_STR)
 
@@ -51,6 +55,7 @@ def main():
         "adapter_name": "poke",
     }
 
+    # running in parallel 
     t0 = time.time()
     futs = [
         a1.generate_with_lora.remote(**task1),

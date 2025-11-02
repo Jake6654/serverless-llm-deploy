@@ -1,3 +1,4 @@
+# file for deploy
 import os
 from ray import serve
 from fastapi import FastAPI, HTTPException
@@ -6,9 +7,11 @@ from .sd_backend import SDBackend
 from io import BytesIO
 import base64
 
+# Ray serve 와 함게 동작할 FastAPI 인스턴스
 app = FastAPI(title="LoRA Inference API (Ray Serve)")
 
 class GenRequest(BaseModel):
+    # define request scheme 
     prompt: str
     lora_repo: str | None = None
     lora_weight: str | None = None
@@ -26,12 +29,15 @@ autoscaling = {
     "target_num_ongoing_requests_per_replica": int(os.getenv("SERVE_TARGET_QPS_PER_REPLICA", "2")),
 }
 
+# Ray Serve 배포 정의: auto scaling + GPU configuration + name
 @serve.deployment(
     autoscaling_config=autoscaling,
     ray_actor_options={"num_gpus": float(os.getenv("RAY_NUM_GPUS_PER_REPLICA", "1"))},
     name="LoRAServeDeployment",
 )
-@serve.ingress(app)
+
+# Fast API 엔드포인트와 통합
+@serve.ingress(app) 
 class LoRAServeDeployment:
     def __init__(self):
         self.backend = SDBackend()
@@ -49,8 +55,11 @@ class LoRAServeDeployment:
                 req.prompt, steps=req.steps, guidance=req.guidance,
                 seed=req.seed, size=(req.width, req.height)
             )
+
+            # detach lora
             if req.lora_repo:
                 self.backend.detach_lora()
+            # Base64 인코딩 후 응답
             buf = BytesIO(); img.save(buf, format="PNG")
             return {"image_base64": base64.b64encode(buf.getvalue()).decode("utf-8")}
         except Exception as e:

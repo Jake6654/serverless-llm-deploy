@@ -4,6 +4,7 @@ import time
 import torch
 import ray
 
+
 class DiffusionActor:
     """
     pre-load Stable Diffusion pipline,
@@ -86,4 +87,6 @@ class DiffusionActor:
 
         return image, gen_time, f"actor_{os.getpid()}"
 
+# 이 클래스를 Ray 에서 원격 실행 가능한 리모트 클래스로 바꿔준다
+# 따라서 ray_demo 파일에서 실제 task 을 actor 에 전달할 수 있음
 DiffusionActorRemote = ray.remote(DiffusionActor)
