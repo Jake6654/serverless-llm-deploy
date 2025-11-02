@@ -12,3 +12,4 @@ uvicorn[standard]>=0.29
 ray[serve]
 
 hf_transfer>=0.1.6
+peft>=0.10.0

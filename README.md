@@ -7,7 +7,7 @@ It includes driver installation, Docker Compose setup, environment variable conf
 
 ## 📋 Environment Overview
 
-- **Base OS:** Debian / Ubuntu 22.04 (Deep Learning VM)
+- **Base OS/image:** Debian / Ubuntu 22.04 <Deep Learning VM wiht CUDA 12.4 M129
 - **GPU:** NVIDIA L4 (or equivalent)
 - **CUDA Version:** 12.1+
 - **Docker:** Installed with Compose plug-in
@@ -242,3 +242,4 @@ curl -X POST "http://127.0.0.1:8343/v1/chat/completions" -H "Content-Type: appli
 Guide prepared by **Jae-Hyuk Chang**  
 for the **ServerlessLLM Research Project (ShenGroup, University of Virginia)**  
 _Last updated: October 2025_
+

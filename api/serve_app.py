@@ -6,7 +6,6 @@ from .sd_backend import SDBackend
 from io import BytesIO
 import base64
 
-# FastAPI 앱 + Serve ingress
 app = FastAPI(title="LoRA Inference API (Ray Serve)")
 
 class GenRequest(BaseModel):
@@ -20,10 +19,17 @@ class GenRequest(BaseModel):
     width: int = Field(512, ge=64, le=2048)
     height: int = Field(512, ge=64, le=2048)
 
+# (선택) 오토스케일 값은 환경변수로
+autoscaling = {
+    "min_replicas": int(os.getenv("SERVE_MIN_REPLICAS", "1")),
+    "max_replicas": int(os.getenv("SERVE_MAX_REPLICAS", "1")),
+    "target_num_ongoing_requests_per_replica": int(os.getenv("SERVE_TARGET_QPS_PER_REPLICA", "2")),
+}
+
 @serve.deployment(
-    route_prefix="/",
-    num_replicas=int(os.getenv("RAY_NUM_REPLICAS", "1")),
-    ray_actor_options={"num_gpus": float(os.getenv("RAY_NUM_GPUS_PER_REPLICA", "1"))}
+    autoscaling_config=autoscaling,
+    ray_actor_options={"num_gpus": float(os.getenv("RAY_NUM_GPUS_PER_REPLICA", "1"))},
+    name="LoRAServeDeployment",
 )
 @serve.ingress(app)
 class LoRAServeDeployment:
@@ -39,8 +45,10 @@ class LoRAServeDeployment:
         try:
             if req.lora_repo and req.lora_weight:
                 self.backend.attach_lora(req.lora_repo, req.lora_weight, req.lora_scale)
-            img = self.backend.generate(req.prompt, steps=req.steps, guidance=req.guidance,
-                                        seed=req.seed, size=(req.width, req.height))
+            img = self.backend.generate(
+                req.prompt, steps=req.steps, guidance=req.guidance,
+                seed=req.seed, size=(req.width, req.height)
+            )
             if req.lora_repo:
                 self.backend.detach_lora()
             buf = BytesIO(); img.save(buf, format="PNG")
@@ -48,5 +56,5 @@ class LoRAServeDeployment:
         except Exception as e:
             raise HTTPException(500, f"generation_failed: {e}")
 
-# serve run api.serve_app:deployment 으로 실행
+# 배인딩
 deployment = LoRAServeDeployment.bind()
